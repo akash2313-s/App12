@@ -1,0 +1,559 @@
+{
+  "entities": {
+    "UserPublic": {
+      "title": "UserPublic",
+      "description": "Public profile details for a ChatConnect user, isolated from PII.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "username": {
+          "type": "string",
+          "description": "Unique lowercase handle without @ symbol",
+          "minLength": 3,
+          "maxLength": 32,
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display full name",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "profilePhoto": {
+          "type": "string",
+          "description": "Profile avatar URL or compressed data URI",
+          "maxLength": 500000
+        },
+        "bio": {
+          "type": "string",
+          "description": "User status bio",
+          "maxLength": 200
+        },
+        "isOnline": {
+          "type": "boolean",
+          "description": "Real-time online presence indicator"
+        },
+        "lastSeen": {
+          "type": "string",
+          "description": "ISO timestamp string of last activity",
+          "maxLength": 64
+        },
+        "privacyPhoto": {
+          "type": "string",
+          "enum": ["everyone", "contacts", "nobody"],
+          "maxLength": 16
+        },
+        "privacyLastSeen": {
+          "type": "string",
+          "enum": ["everyone", "contacts", "nobody"],
+          "maxLength": 16
+        },
+        "privacyOnline": {
+          "type": "string",
+          "enum": ["everyone", "contacts", "nobody"],
+          "maxLength": 16
+        },
+        "readReceipts": {
+          "type": "boolean",
+          "description": "Whether read receipts are enabled"
+        },
+        "accountStatus": {
+          "type": "string",
+          "enum": ["active", "suspended", "banned"],
+          "maxLength": 16
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of profile creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last profile update"
+        }
+      },
+      "required": [
+        "userId",
+        "username",
+        "name",
+        "profilePhoto",
+        "bio",
+        "isOnline",
+        "lastSeen",
+        "privacyPhoto",
+        "privacyLastSeen",
+        "privacyOnline",
+        "readReceipts",
+        "accountStatus",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Strictly isolated PII and personal app preferences for a user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 254
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "blockedUsers": {
+          "type": "array",
+          "description": "Bounded list of blocked user IDs (max 50)"
+        },
+        "pinnedChats": {
+          "type": "array",
+          "description": "Bounded list of pinned chat IDs (max 20)"
+        },
+        "archivedChats": {
+          "type": "array",
+          "description": "Bounded list of archived chat IDs (max 50)"
+        },
+        "mutedChats": {
+          "type": "array",
+          "description": "Bounded list of muted chat IDs (max 50)"
+        },
+        "wallpaper": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "enterToSend": {
+          "type": "boolean"
+        },
+        "mediaAutoDownload": {
+          "type": "boolean"
+        },
+        "notificationsEnabled": {
+          "type": "boolean"
+        },
+        "notificationSound": {
+          "type": "boolean"
+        },
+        "notificationVibration": {
+          "type": "boolean"
+        },
+        "notificationPreview": {
+          "type": "boolean"
+        },
+        "theme": {
+          "type": "string",
+          "enum": ["light", "dark", "system"],
+          "maxLength": 16
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "userId",
+        "email",
+        "phone",
+        "blockedUsers",
+        "pinnedChats",
+        "archivedChats",
+        "mutedChats",
+        "wallpaper",
+        "enterToSend",
+        "mediaAutoDownload",
+        "notificationsEnabled",
+        "notificationSound",
+        "notificationVibration",
+        "notificationPreview",
+        "theme",
+        "updatedAt"
+      ]
+    },
+    "UsernameRegistry": {
+      "title": "UsernameRegistry",
+      "description": "Maps unique lowercase username to userId for exact search and uniqueness.",
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 32,
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["username", "userId", "createdAt"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "1-to-1 private conversation metadata between two participants.",
+      "type": "object",
+      "properties": {
+        "chatId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "participant1": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "participant2": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "participants": {
+          "type": "array",
+          "description": "Strictly 2 participant UIDs for array-contains queries"
+        },
+        "lastMessageText": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "lastMessageType": {
+          "type": "string",
+          "enum": ["text", "image", "video", "document", "voice", "sticker"],
+          "maxLength": 20
+        },
+        "lastMessageSenderId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "lastMessageTime": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "unreadCount1": {
+          "type": "integer"
+        },
+        "unreadCount2": {
+          "type": "integer"
+        },
+        "clearedAt1": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "clearedAt2": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "chatId",
+        "participant1",
+        "participant2",
+        "participants",
+        "lastMessageText",
+        "lastMessageType",
+        "lastMessageSenderId",
+        "lastMessageTime",
+        "unreadCount1",
+        "unreadCount2",
+        "clearedAt1",
+        "clearedAt2",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Individual message inside a 1-to-1 chat.",
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "chatId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "receiverId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "participants": {
+          "type": "array",
+          "description": "Strictly 2 participant UIDs [senderId, receiverId]"
+        },
+        "messageType": {
+          "type": "string",
+          "enum": ["text", "image", "video", "document", "voice", "sticker"],
+          "maxLength": 20
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "mediaUrl": {
+          "type": "string",
+          "maxLength": 700000
+        },
+        "mediaName": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "status": {
+          "type": "string",
+          "enum": ["sending", "sent", "delivered", "read"],
+          "maxLength": 16
+        },
+        "replyToId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "replyToText": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "replyToSenderName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "isForwarded": {
+          "type": "boolean"
+        },
+        "isDeleted": {
+          "type": "boolean"
+        },
+        "reactionsSummary": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "messageId",
+        "chatId",
+        "senderId",
+        "receiverId",
+        "participants",
+        "messageType",
+        "text",
+        "mediaUrl",
+        "mediaName",
+        "status",
+        "replyToId",
+        "replyToText",
+        "replyToSenderName",
+        "isForwarded",
+        "isDeleted",
+        "reactionsSummary",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Moderation report submitted by a user against another user or issue.",
+      "type": "object",
+      "properties": {
+        "reportId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reporterId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "targetUserId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "resolved", "dismissed"],
+          "maxLength": 16
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "reportId",
+        "reporterId",
+        "targetUserId",
+        "reason",
+        "details",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "System-wide announcement created by an administrator.",
+      "type": "object",
+      "properties": {
+        "announcementId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "authorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "isActive": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "announcementId",
+        "title",
+        "body",
+        "authorId",
+        "isActive",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted administrator marker document.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "grantedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "grantedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublic" },
+      "description": "Public user profiles accessible by exact userId; writable by owner or admin."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "Isolated PII and personal settings accessible strictly by owner or admin."
+    },
+    "/usernames/{username}": {
+      "schema": { "$ref": "#/entities/UsernameRegistry" },
+      "description": "Unique username lookup registry."
+    },
+    "/chats/{chatId}": {
+      "schema": { "$ref": "#/entities/Chat" },
+      "description": "1-to-1 chat threads accessible only by the two participants."
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Messages belonging to a 1-to-1 chat."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/Report" },
+      "description": "User-submitted moderation reports."
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Admin-managed system announcements."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted admin registry."
+    }
+  }
+}

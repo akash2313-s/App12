@@ -1,0 +1,519 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 0. Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 1. Hardened Global Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUsernameKey(uname) {
+      return uname is string && uname.size() >= 3 && uname.size() <= 32 && uname.matches('^[a-z0-9_]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn();
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email_verified == true && (
+        request.auth.token.email == 'akash1719singh@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isBoundedStringArray(arr, maxLen) {
+      return arr is list && arr.size() <= maxLen && (arr.size() == 0 || (arr[0] is string && arr[0].size() <= 128));
+    }
+
+    // 2. Entity Validation Blueprints (Anti-Update-Gap)
+
+    function isValidUserPublic(data, userId) {
+      return data.keys().hasAll([
+        'userId', 'username', 'name', 'profilePhoto', 'bio',
+        'isOnline', 'lastSeen', 'privacyPhoto', 'privacyLastSeen',
+        'privacyOnline', 'readReceipts', 'accountStatus', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'username', 'name', 'profilePhoto', 'bio',
+        'isOnline', 'lastSeen', 'privacyPhoto', 'privacyLastSeen',
+        'privacyOnline', 'readReceipts', 'accountStatus', 'createdAt', 'updatedAt'
+      ]) &&
+      data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId == userId &&
+      data.username is string && data.username.size() >= 3 && data.username.size() <= 32 && data.username.matches('^[a-z0-9_]+$') &&
+      data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+      data.profilePhoto is string && data.profilePhoto.size() <= 500000 &&
+      data.bio is string && data.bio.size() <= 200 &&
+      data.isOnline is bool &&
+      data.lastSeen is string && data.lastSeen.size() <= 64 &&
+      data.privacyPhoto is string && data.privacyPhoto.size() <= 16 && data.privacyPhoto in ['everyone', 'contacts', 'nobody'] &&
+      data.privacyLastSeen is string && data.privacyLastSeen.size() <= 16 && data.privacyLastSeen in ['everyone', 'contacts', 'nobody'] &&
+      data.privacyOnline is string && data.privacyOnline.size() <= 16 && data.privacyOnline in ['everyone', 'contacts', 'nobody'] &&
+      data.readReceipts is bool &&
+      data.accountStatus is string && data.accountStatus.size() <= 16 && data.accountStatus in ['active', 'suspended', 'banned'] &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivate(data, userId) {
+      return data.keys().hasAll([
+        'userId', 'email', 'phone', 'blockedUsers', 'pinnedChats',
+        'archivedChats', 'mutedChats', 'wallpaper', 'enterToSend',
+        'mediaAutoDownload', 'notificationsEnabled', 'notificationSound',
+        'notificationVibration', 'notificationPreview', 'theme', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'email', 'phone', 'blockedUsers', 'pinnedChats',
+        'archivedChats', 'mutedChats', 'wallpaper', 'enterToSend',
+        'mediaAutoDownload', 'notificationsEnabled', 'notificationSound',
+        'notificationVibration', 'notificationPreview', 'theme', 'updatedAt'
+      ]) &&
+      data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId == userId &&
+      data.email is string && data.email.size() <= 254 &&
+      data.phone is string && data.phone.size() <= 32 &&
+      isBoundedStringArray(data.blockedUsers, 50) &&
+      isBoundedStringArray(data.pinnedChats, 20) &&
+      isBoundedStringArray(data.archivedChats, 50) &&
+      isBoundedStringArray(data.mutedChats, 50) &&
+      data.wallpaper is string && data.wallpaper.size() <= 64 &&
+      data.enterToSend is bool &&
+      data.mediaAutoDownload is bool &&
+      data.notificationsEnabled is bool &&
+      data.notificationSound is bool &&
+      data.notificationVibration is bool &&
+      data.notificationPreview is bool &&
+      data.theme is string && data.theme.size() <= 16 && data.theme in ['light', 'dark', 'system'] &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidUsernameRegistry(data, username) {
+      return data.keys().hasAll(['username', 'userId', 'createdAt']) &&
+      data.keys().hasOnly(['username', 'userId', 'createdAt']) &&
+      data.username is string && data.username.size() >= 3 && data.username.size() <= 32 && data.username == username &&
+      data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidChat(data, chatId) {
+      return data.keys().hasAll([
+        'chatId', 'participant1', 'participant2', 'participants',
+        'lastMessageText', 'lastMessageType', 'lastMessageSenderId',
+        'lastMessageTime', 'unreadCount1', 'unreadCount2',
+        'clearedAt1', 'clearedAt2', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'chatId', 'participant1', 'participant2', 'participants',
+        'lastMessageText', 'lastMessageType', 'lastMessageSenderId',
+        'lastMessageTime', 'unreadCount1', 'unreadCount2',
+        'clearedAt1', 'clearedAt2', 'createdAt', 'updatedAt'
+      ]) &&
+      data.chatId is string && data.chatId.size() >= 1 && data.chatId.size() <= 128 && data.chatId == chatId &&
+      data.participant1 is string && data.participant1.size() >= 1 && data.participant1.size() <= 128 && data.participant1.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.participant2 is string && data.participant2.size() >= 1 && data.participant2.size() <= 128 && data.participant2.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.participant1 != data.participant2 &&
+      data.participants is list && data.participants.size() == 2 &&
+      data.participants[0] is string && data.participants[0].size() <= 128 &&
+      data.participants[1] is string && data.participants[1].size() <= 128 &&
+      data.participant1 in data.participants && data.participant2 in data.participants &&
+      data.lastMessageText is string && data.lastMessageText.size() <= 500 &&
+      data.lastMessageType is string && data.lastMessageType.size() <= 20 && data.lastMessageType in ['text', 'image', 'video', 'document', 'voice', 'sticker'] &&
+      data.lastMessageSenderId is string && data.lastMessageSenderId.size() <= 128 &&
+      data.lastMessageTime is string && data.lastMessageTime.size() <= 64 &&
+      data.unreadCount1 is int && data.unreadCount1 >= 0 &&
+      data.unreadCount2 is int && data.unreadCount2 >= 0 &&
+      data.clearedAt1 is string && data.clearedAt1.size() <= 64 &&
+      data.clearedAt2 is string && data.clearedAt2.size() <= 64 &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidMessage(data, chatId, messageId) {
+      return data.keys().hasAll([
+        'messageId', 'chatId', 'senderId', 'receiverId', 'participants',
+        'messageType', 'text', 'mediaUrl', 'mediaName', 'status',
+        'replyToId', 'replyToText', 'replyToSenderName',
+        'isForwarded', 'isDeleted', 'reactionsSummary', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'messageId', 'chatId', 'senderId', 'receiverId', 'participants',
+        'messageType', 'text', 'mediaUrl', 'mediaName', 'status',
+        'replyToId', 'replyToText', 'replyToSenderName',
+        'isForwarded', 'isDeleted', 'reactionsSummary', 'createdAt', 'updatedAt'
+      ]) &&
+      data.messageId is string && data.messageId.size() >= 1 && data.messageId.size() <= 128 && data.messageId == messageId &&
+      data.chatId is string && data.chatId.size() >= 1 && data.chatId.size() <= 128 && data.chatId == chatId &&
+      data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 && data.senderId.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.receiverId is string && data.receiverId.size() >= 1 && data.receiverId.size() <= 128 && data.receiverId.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.senderId != data.receiverId &&
+      data.participants is list && data.participants.size() == 2 &&
+      data.participants[0] is string && data.participants[0].size() <= 128 &&
+      data.participants[1] is string && data.participants[1].size() <= 128 &&
+      data.senderId in data.participants && data.receiverId in data.participants &&
+      data.messageType is string && data.messageType.size() <= 20 && data.messageType in ['text', 'image', 'video', 'document', 'voice', 'sticker'] &&
+      data.text is string && data.text.size() <= 4000 &&
+      data.mediaUrl is string && data.mediaUrl.size() <= 700000 &&
+      data.mediaName is string && data.mediaName.size() <= 255 &&
+      data.status is string && data.status.size() <= 16 && data.status in ['sending', 'sent', 'delivered', 'read'] &&
+      data.replyToId is string && data.replyToId.size() <= 128 &&
+      data.replyToText is string && data.replyToText.size() <= 500 &&
+      data.replyToSenderName is string && data.replyToSenderName.size() <= 100 &&
+      data.isForwarded is bool &&
+      data.isDeleted is bool &&
+      data.reactionsSummary is string && data.reactionsSummary.size() <= 500 &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidReport(data, reportId) {
+      return data.keys().hasAll([
+        'reportId', 'reporterId', 'targetUserId', 'reason', 'details', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'reportId', 'reporterId', 'targetUserId', 'reason', 'details', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      data.reportId is string && data.reportId.size() >= 1 && data.reportId.size() <= 128 && data.reportId == reportId &&
+      data.reporterId is string && data.reporterId.size() >= 1 && data.reporterId.size() <= 128 && data.reporterId.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.targetUserId is string && data.targetUserId.size() >= 1 && data.targetUserId.size() <= 128 && data.targetUserId.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 100 &&
+      data.details is string && data.details.size() <= 1000 &&
+      data.status is string && data.status.size() <= 16 && data.status in ['open', 'resolved', 'dismissed'] &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidAnnouncement(data, announcementId) {
+      return data.keys().hasAll([
+        'announcementId', 'title', 'body', 'authorId', 'isActive', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'announcementId', 'title', 'body', 'authorId', 'isActive', 'createdAt', 'updatedAt'
+      ]) &&
+      data.announcementId is string && data.announcementId.size() >= 1 && data.announcementId.size() <= 128 && data.announcementId == announcementId &&
+      data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+      data.body is string && data.body.size() >= 1 && data.body.size() <= 1000 &&
+      data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 && data.authorId.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.isActive is bool &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidAdminRecord(data, adminId) {
+      return data.keys().hasAll(['userId', 'grantedAt']) &&
+      data.keys().hasOnly(['userId', 'grantedAt']) &&
+      data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId == adminId &&
+      data.grantedAt is timestamp;
+    }
+
+    // 3. Collection Match Blocks
+
+    // Public User Profiles (PII-free)
+    match /users/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if existing().accountStatus == 'active' || isAdmin();
+
+      allow create: if isVerified() &&
+        isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUserPublic(incoming(), userId) &&
+        incoming().accountStatus == 'active' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        getAfter(/databases/$(database)/documents/usernames/$(incoming().username)).data.userId == request.auth.uid;
+
+      allow update: if isVerified() &&
+        isValidId(userId) &&
+        isValidUserPublic(incoming(), userId) && (
+          // Action 1: Owner updates profile, presence, or privacy settings (cannot change accountStatus)
+          (
+            isOwner(userId) &&
+            existing().accountStatus == 'active' &&
+            incoming().accountStatus == 'active' &&
+            incoming().userId == existing().userId &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time &&
+            (
+              incoming().username == existing().username ||
+              getAfter(/databases/$(database)/documents/usernames/$(incoming().username)).data.userId == request.auth.uid
+            ) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'username', 'name', 'profilePhoto', 'bio',
+              'isOnline', 'lastSeen', 'privacyPhoto', 'privacyLastSeen',
+              'privacyOnline', 'readReceipts', 'updatedAt'
+            ])
+          ) ||
+          // Action 2: Admin moderation (suspend/ban/clean profile content)
+          isAdmin()
+        );
+
+      allow delete: if isVerified() && isValidId(userId) && (isOwner(userId) || isAdmin());
+
+      // Isolated Private PII & User Preferences Subcollection
+      match /private/{docId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(docId) && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+        allow create: if isVerified() &&
+          isValidId(userId) &&
+          isValidId(docId) &&
+          isOwner(userId) &&
+          isValidUserPrivate(incoming(), userId) &&
+          incoming().updatedAt == request.time &&
+          existsAfter(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isVerified() &&
+          isValidId(userId) &&
+          isValidId(docId) &&
+          isValidUserPrivate(incoming(), userId) && (
+            (
+              isOwner(userId) &&
+              incoming().userId == existing().userId &&
+              incoming().updatedAt == request.time &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'email', 'phone', 'blockedUsers', 'pinnedChats',
+                'archivedChats', 'mutedChats', 'wallpaper', 'enterToSend',
+                'mediaAutoDownload', 'notificationsEnabled', 'notificationSound',
+                'notificationVibration', 'notificationPreview', 'theme', 'updatedAt'
+              ])
+            ) ||
+            isAdmin()
+          );
+
+        allow delete: if isVerified() && isValidId(userId) && isValidId(docId) && (isOwner(userId) || isAdmin());
+      }
+    }
+
+    // Unique Username Registry
+    match /usernames/{username} {
+      allow get: if isValidUsernameKey(username);
+      allow list: if existing().username.size() >= 3 || isAdmin();
+
+      allow create: if isVerified() &&
+        isValidUsernameKey(username) &&
+        isValidUsernameRegistry(incoming(), username) &&
+        incoming().userId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        existsAfter(/databases/$(database)/documents/users/$(request.auth.uid));
+
+      allow update: if false;
+
+      allow delete: if isVerified() &&
+        isValidUsernameKey(username) &&
+        (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 1-to-1 Chats
+    match /chats/{chatId} {
+      allow get: if isSignedIn() && isValidId(chatId) && (
+        existing().participant1 == request.auth.uid ||
+        existing().participant2 == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow list: if isSignedIn() && (
+        request.auth.uid in existing().participants ||
+        isAdmin()
+      );
+
+      allow create: if isVerified() &&
+        isValidId(chatId) &&
+        isValidChat(incoming(), chatId) &&
+        (incoming().participant1 == request.auth.uid || incoming().participant2 == request.auth.uid) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(incoming().participant1)) &&
+        exists(/databases/$(database)/documents/users/$(incoming().participant2));
+
+      allow update: if isVerified() &&
+        isValidId(chatId) &&
+        isValidChat(incoming(), chatId) && (
+          (
+            (existing().participant1 == request.auth.uid || existing().participant2 == request.auth.uid) &&
+            incoming().chatId == existing().chatId &&
+            incoming().participant1 == existing().participant1 &&
+            incoming().participant2 == existing().participant2 &&
+            incoming().participants == existing().participants &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'lastMessageText', 'lastMessageType', 'lastMessageSenderId',
+              'lastMessageTime', 'unreadCount1', 'unreadCount2',
+              'clearedAt1', 'clearedAt2', 'updatedAt'
+            ])
+          ) ||
+          isAdmin()
+        );
+
+      allow delete: if isVerified() &&
+        isValidId(chatId) &&
+        (existing().participant1 == request.auth.uid || existing().participant2 == request.auth.uid || isAdmin());
+
+      // Messages Subcollection (Protected by Master Gate)
+      match /messages/{messageId} {
+        function parentChat() {
+          return get(/databases/$(database)/documents/chats/$(chatId)).data;
+        }
+
+        function isChatMember() {
+          let chat = parentChat();
+          return chat.participant1 == request.auth.uid || chat.participant2 == request.auth.uid;
+        }
+
+        allow get: if isSignedIn() &&
+          isValidId(chatId) &&
+          isValidId(messageId) &&
+          (isChatMember() || isAdmin());
+
+        allow list: if isSignedIn() && (
+          request.auth.uid in existing().participants ||
+          isAdmin()
+        );
+
+        allow create: if isVerified() &&
+          isValidId(chatId) &&
+          isValidId(messageId) &&
+          isValidMessage(incoming(), chatId, messageId) &&
+          incoming().senderId == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          isChatMember();
+
+        allow update: if isVerified() &&
+          isValidId(chatId) &&
+          isValidId(messageId) &&
+          isValidMessage(incoming(), chatId, messageId) && (
+            // Action 1: Participant updates delivery/read status or reactions
+            (
+              isChatMember() &&
+              incoming().messageId == existing().messageId &&
+              incoming().chatId == existing().chatId &&
+              incoming().senderId == existing().senderId &&
+              incoming().receiverId == existing().receiverId &&
+              incoming().participants == existing().participants &&
+              incoming().createdAt == existing().createdAt &&
+              incoming().updatedAt == request.time &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'status', 'reactionsSummary', 'updatedAt'
+              ])
+            ) ||
+            // Action 2: Chat participant soft-deletes or sender edits message
+            (
+              isChatMember() &&
+              incoming().messageId == existing().messageId &&
+              incoming().chatId == existing().chatId &&
+              incoming().senderId == existing().senderId &&
+              incoming().receiverId == existing().receiverId &&
+              incoming().participants == existing().participants &&
+              incoming().createdAt == existing().createdAt &&
+              incoming().updatedAt == request.time &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'text', 'mediaUrl', 'isDeleted', 'updatedAt'
+              ])
+            ) ||
+            isAdmin()
+          );
+
+        allow delete: if isVerified() &&
+          isValidId(chatId) &&
+          isValidId(messageId) &&
+          (isChatMember() || isAdmin());
+      }
+    }
+
+    // Moderation Reports
+    match /reports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && (existing().reporterId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().reporterId == request.auth.uid || isAdmin());
+
+      allow create: if isVerified() &&
+        isValidId(reportId) &&
+        isValidReport(incoming(), reportId) &&
+        incoming().reporterId == request.auth.uid &&
+        incoming().status == 'open' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(incoming().targetUserId));
+
+      allow update: if isVerified() &&
+        isValidId(reportId) &&
+        isValidReport(incoming(), reportId) && (
+          (
+            isAdmin() &&
+            incoming().reportId == existing().reportId &&
+            incoming().reporterId == existing().reporterId &&
+            incoming().targetUserId == existing().targetUserId &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'details', 'updatedAt'])
+          ) ||
+          isAdmin()
+        );
+
+      allow delete: if isVerified() && isValidId(reportId) && isAdmin();
+    }
+
+    // System Announcements
+    match /announcements/{announcementId} {
+      allow get: if isSignedIn() && isValidId(announcementId);
+      allow list: if isSignedIn() && (existing().isActive == true || isAdmin());
+
+      allow create: if isVerified() &&
+        isValidId(announcementId) &&
+        isValidAnnouncement(incoming(), announcementId) &&
+        incoming().authorId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isVerified() &&
+        isValidId(announcementId) &&
+        isValidAnnouncement(incoming(), announcementId) && (
+          (
+            isAdmin() &&
+            incoming().announcementId == existing().announcementId &&
+            incoming().authorId == existing().authorId &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().updatedAt == request.time &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'body', 'isActive', 'updatedAt'])
+          ) ||
+          isAdmin()
+        );
+
+      allow delete: if isVerified() && isValidId(announcementId) && isAdmin();
+    }
+
+    // Trusted Admin Registry
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list: if isAdmin();
+
+      allow create, update: if isVerified() &&
+        isValidId(adminId) &&
+        isValidAdminRecord(incoming(), adminId) &&
+        isAdmin();
+
+      allow delete: if isVerified() && isValidId(adminId) && isAdmin();
+    }
+  }
+}
